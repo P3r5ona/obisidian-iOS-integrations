@@ -37,144 +37,186 @@
 //    My Vault||folder||/folderPath
 //    My Vault||file||/folderPath/fileName.md
 
-const testParameter="MyVault||Recent";
+const testParameter = "MyVault||Recent";
 
-const params = (args.widgetParameter ? args.widgetParameter : testParameter).split("||"); 
+const params = (args.widgetParameter ? args.widgetParameter : testParameter).split("||");
 const paramBookmark = params[0]; // in Scriptable settings, create a bookmark to your vault
-const paramMode = params[1] ? (params[1]).toUpperCase() : "RECENT"; 
-const paramPath = params[2]; 
-const refreshRateInSeconds = 300;
+const paramMode = params[1] ? (params[1]).toUpperCase() : "RECENT";
+const paramPath = params[2];
+const refreshInterval = 30 * 60 * 1000; // 30 minutes in milliseconds
+
 
 const WIDGET_FONTS = {
-    small: 		{ WIDGET_TITLE: 20, WIDGET_DESCRIPTION: 14, rowOutput: 5  },
-    medium: 		{ WIDGET_TITLE: 22, WIDGET_DESCRIPTION: 14, rowOutput: 5  },
-    large: 		{ WIDGET_TITLE: 24, WIDGET_DESCRIPTION: 14, rowOutput: 12 },
-    extraLarge: 	{ WIDGET_TITLE: 26, WIDGET_DESCRIPTION: 15, rowOutput: 12 },
-    default: 	{ WIDGET_TITLE: 20, WIDGET_DESCRIPTION: 14, rowOutput: 12 }
+	small: { WIDGET_TITLE: 20, WIDGET_DESCRIPTION: 14, rowOutput: 5 },
+	medium: { WIDGET_TITLE: 22, WIDGET_DESCRIPTION: 14, rowOutput: 5 },
+	large: { WIDGET_TITLE: 24, WIDGET_DESCRIPTION: 14, rowOutput: 12 },
+	extraLarge: { WIDGET_TITLE: 26, WIDGET_DESCRIPTION: 15, rowOutput: 12 },
+	default: { WIDGET_TITLE: 20, WIDGET_DESCRIPTION: 14, rowOutput: 12 }
 }
 
 const fm = FileManager.local();
 const widget = await createWidget()
 
 if (config.runsInWidget) {
-    Script.setWidget(widget);
+	Script.setWidget(widget);
 } else {
-    //widget.presentMedium();
-    widget.presentLarge();
-    //widget.presentExtraLarge();
+	//widget.presentMedium();
+	widget.presentLarge();
+	//widget.presentExtraLarge();
 }
 Script.complete()
 
 async function createWidget() {
 	let widget = new ListWidget();
-	widget.spacing=-2;
-	widget.refreshAfterDate = new Date(Date.now() + 1000 * refreshRateInSeconds); // add XX second to now
+	widget.spacing = -2;
 
-   const titleStack = widget.addStack();
-   titleStack.setPadding(10, 0, 10, 0);
-   let titleText = paramPath ?  paramPath.replace(".md","") : "";
-  	if(paramMode==="RECENT") titleText = "Recent";
-  	if(paramMode==="STARRED") titleText = "Starred";
-   const widgetTitleText = titleStack.addText( "Obsidian: " + titleText );
-   widgetTitleText.font = Font.boldSystemFont(getWidgetFont('WIDGET_TITLE'));
-	
-  	if( !fm.bookmarkExists(paramBookmark) ) {
-	  	errorMessage(widget, "The Scriptable bookmark does not exist for your Obsidian vault. Open settings in Scriptable and create a Bookmark to the root folder of your vault.");
-	} else {  
-		if(paramMode==="RECENT")
+    widget.refreshAfterDate = new Date(Date.now() + refreshInterval);
+
+	const titleStack = widget.addStack();
+	titleStack.setPadding(10, 0, 10, 0);
+	let titleText = paramPath ? paramPath.replace(".md", "") : "";
+	if (paramMode === "RECENT") titleText = "Recent";
+	if (paramMode === "STARRED") titleText = "Starred";
+	const widgetTitleText = titleStack.addText("Obsidian: " + titleText);
+	widgetTitleText.font = Font.boldSystemFont(getWidgetFont('WIDGET_TITLE'));
+
+	if (!fm.bookmarkExists(paramBookmark)) {
+		errorMessage(widget, "The Scriptable bookmark does not exist for your Obsidian vault. Open settings in Scriptable and create a Bookmark to the root folder of your vault.");
+	} else {
+		if (paramMode === "RECENT")
 			await displayRecentFiles(widget);
-	 	else if(paramMode==="STARRED")
+		else if (paramMode === "STARRED")
 			await displayStarredFiles(widget);
-	 	else if(paramMode==="FOLDER")
+		else if (paramMode === "FOLDER")
 			await displayFilesFromFolder(widget);
-  		else if(paramMode==="FILE") 
-  			await displayFile(widget)
+		else if (paramMode === "FILE")
+			await displayFile(widget);
+		else if (paramMode === "RANDOM")
+            await displayRandom(widget);
 	}
-	 widget.addSpacer();
-    return widget;
+	widget.addSpacer();
+	return widget;
 }
 
 async function displayFile(widget) {
-  	const vaultPath = fm.bookmarkedPath(paramBookmark); 
-	const contentsString = await fm.readString( vaultPath + "/" + paramPath );
+	const vaultPath = fm.bookmarkedPath(paramBookmark);
+	const contentsString = await fm.readString(vaultPath + "/" + paramPath);
 	const row = widget.addStack();
-	const fileName = row.addText( contentsString );
+	const fileName = row.addText(contentsString);
 	if (!config.runsWithSiri) row.url = `obsidian://open?vault=${encodeURIComponent(paramBookmark)}&file=${encodeURIComponent(paramPath)}`;
 }
 
 async function displayRecentFiles(widget) {
-  	const vaultPath = fm.bookmarkedPath(paramBookmark); 
-	const contentsString = await fm.readString( vaultPath + "/.obsidian/plugins/recent-files-obsidian/data.json" );
-	const rf = contentsString===null ? null : JSON.parse(contentsString).recentFiles;
-   
-  	if (rf===null) return	errorMessage(widget, "No recent files information found. Perhaps the Recent Files plugin is not installed in Obsidian. More info on this plugin can be found at: https://github.com/tgrosinger/recent-files-obsidian", "https://github.com/tgrosinger/recent-files-obsidian");
+	const vaultPath = fm.bookmarkedPath(paramBookmark);
+	const contentsString = await fm.readString(vaultPath + "/.obsidian/plugins/recent-files-obsidian/data.json");
+	const rf = contentsString === null ? null : JSON.parse(contentsString).recentFiles;
+
+	if (rf === null) return errorMessage(widget, "No recent files information found. Perhaps the Recent Files plugin is not installed in Obsidian. More info on this plugin can be found at: https://github.com/tgrosinger/recent-files-obsidian", "https://github.com/tgrosinger/recent-files-obsidian");
 
 	const maxCount = rf.length > getWidgetFont('rowOutput') ? getWidgetFont('rowOutput') : rf.length;
 	for (let i = 0; i < maxCount; i++) {
-   		await addItem(widget, rf[i]);
-       if (i != rf.length - 1) widget.addSpacer(5);
+		await addItem(widget, rf[i]);
+		if (i != rf.length - 1) widget.addSpacer(5);
 	}
 }
 
 async function displayFilesFromFolder(widget) {
-	const vaultPath = fm.bookmarkedPath(paramBookmark); 
+	const vaultPath = fm.bookmarkedPath(paramBookmark);
 	const fullPath = vaultPath + paramPath;
-	if(fm.isDirectory(fullPath)===false) 
- 		return errorMessage(widget, "The folder path is not valid. Please update the parameter for this widget");
+	if (fm.isDirectory(fullPath) === false)
+		return errorMessage(widget, "The folder path is not valid. Please update the parameter for this widget");
 
 	const folderContents = await fm.listContents(fullPath);
-	folderContents.sort((a,b)=>a>b); // sort the array
+	folderContents.sort((a, b) => a > b); // sort the array
 
 	const maxCount = folderContents.length > getWidgetFont('rowOutput') ? getWidgetFont('rowOutput') : folderContents.length;
 	for (let i = 0; i < maxCount; i++) {
-  		if(fm.isDirectory(vaultPath + "/" + folderContents[i])===false) {
-	  		const data = { basename: folderContents[i], path: folderContents[i] };
+		if (fm.isDirectory(vaultPath + "/" + folderContents[i]) === false) {
+			const data = { basename: folderContents[i], path: folderContents[i] };
 			await addItem(widget, data);
 			if (i != folderContents.length - 1) widget.addSpacer(5);
-  		}
-	}  
+		}
+	}
 }
 
 async function displayStarredFiles(widget) {
-  	const vaultPath = fm.bookmarkedPath(paramBookmark); 
-	const contentsString = await fm.readString( vaultPath + "/.obsidian/starred.json" );
-	const starred = contentsString===null ? null : JSON.parse(contentsString).items;
-   
-  	if (starred===null) return	errorMessage(widget, "No starred files found. Perhaps the Starred core plugin is not enabled or you have not starred any files in this vault yet");
+	const vaultPath = fm.bookmarkedPath(paramBookmark);
+	const contentsString = await fm.readString(vaultPath + "/.obsidian/starred.json");
+	const starred = contentsString === null ? null : JSON.parse(contentsString).items;
+
+	if (starred === null) return errorMessage(widget, "No starred files found. Perhaps the Starred core plugin is not enabled or you have not starred any files in this vault yet");
 
 	const maxCount = starred.length > getWidgetFont('rowOutput') ? getWidgetFont('rowOutput') : starred.length;
 	for (let i = 0; i < maxCount; i++) {
 		const data = { basename: starred[i].title, path: (starred[i].path || starred[i].query) };
 		const uriType = starred[i].type === "search" ? "search" : "open";
-   		await addItem(widget, data, uriType);
-      if (i != starred.length - 1) widget.addSpacer(5);
+		await addItem(widget, data, uriType);
+		if (i != starred.length - 1) widget.addSpacer(5);
 	}
 }
 
-async function addItem(widget, doc, uriType="open") {
-  	//exmaple doc: {"basename":"2021-08-24","path":"f/DNP/2021-08-24.md"}
-    const row = widget.addStack();
-    const dot = row.addText( "• "  );
-    const fileName = row.addText( doc.basename );
-    row.addSpacer();
-    if (!config.runsWithSiri) {
-		const encodedPath = encodeURIComponent(doc.path);
-		if(uriType==="search")
-			row.url = `obsidian://search?vault=${encodeURIComponent(paramBookmark)}&query=${encodedPath}`;
-		else //default is for uri type open
-			row.url = `obsidian://open?vault=${encodeURIComponent(paramBookmark)}&file=${encodedPath}`;
+// 显示随机文件列表
+async function displayRandom(widget) {
+    const vaultPath = fm.bookmarkedPath(paramBookmark);
+    const fullPath = vaultPath + paramPath;
+
+    if (fm.isDirectory(fullPath) === false) {
+        return errorMessage(widget, "The folder path is not valid. Please update the parameter for this widget");
+    }
+
+    const folderContents = await fm.listContents(fullPath);
+
+    const maxCount = folderContents.length > getWidgetFont('rowOutput') ? getWidgetFont('rowOutput') : folderContents.length;
+
+    // 从文件夹内容中随机选择maxCount个文件
+    const randomFiles = getRandomItems(folderContents, maxCount);
+
+    for (let i = 0; i < maxCount; i++) {
+        if (fm.isDirectory(vaultPath + "/" + randomFiles[i]) === false) {
+            const data = { basename: randomFiles[i], path: randomFiles[i] };
+            await addItem(widget, data);
+            if (i != randomFiles.length - 1) widget.addSpacer(5);
+        }
     }
 }
 
-function errorMessage(widget, msg, url = "" ) {
+async function addItem(widget, doc, uriType = "open") {
+	//exmaple doc: {"basename":"2021-08-24","path":"f/DNP/2021-08-24.md"}
+	const row = widget.addStack();
+	const dot = row.addText("• ");
+	const fileName = row.addText(doc.basename);
+	row.addSpacer();
+	if (!config.runsWithSiri) {
+		const encodedPath = encodeURIComponent(doc.path);
+		if (uriType === "search")
+			row.url = `obsidian://search?vault=${encodeURIComponent(paramBookmark)}&query=${encodedPath}`;
+		else //default is for uri type open
+			row.url = `obsidian://open?vault=${encodeURIComponent(paramBookmark)}&file=${encodedPath}`;
+	}
+}
+
+function errorMessage(widget, msg, url = "") {
 	const errorText = widget.addText(msg);
 	errorText.textColor = Color.white();
 	errorText.font = Font.boldSystemFont(getWidgetFont('WIDGET_DESCRIPTION'));
-	if(url!="") errorText.url = url;
+	if (url != "") errorText.url = url;
 	return widget;
 }
 
 function getWidgetFont(key) {
-    return WIDGET_FONTS[config.widgetFamily] ? WIDGET_FONTS[config.widgetFamily][key] : WIDGET_FONTS.default[key];
+	return WIDGET_FONTS[config.widgetFamily] ? WIDGET_FONTS[config.widgetFamily][key] : WIDGET_FONTS.default[key];
 }
 
+// 辅助函数，用于从数组中随机选择n个元素
+function getRandomItems(arr, n) {
+    const shuffled = arr.slice(0);
+    let i = arr.length;
+    let temp, index;
+    while (i--) {
+        index = Math.floor((i + 1) * Math.random());
+        temp = shuffled[index];
+        shuffled[index] = shuffled[i];
+        shuffled[i] = temp;
+    }
+    return shuffled.slice(0, n);
+}
